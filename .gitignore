@@ -1,0 +1,17 @@
+# Subdirectories
+.vs/
+.git/
+data/
+debug/
+release/
+enc_temp_folder/*
+GeneratedFiles/
+x64/
+
+# Others
+*.db
+*.opendb
+*.vcxproj
+*.filters
+*.user
+*.TMP
