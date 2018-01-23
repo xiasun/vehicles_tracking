@@ -28,6 +28,7 @@
 #include <yolo_v2_class.hpp>	// imported functions from DLL
 
 #include "vehicle.h"
+#include "video_viewer.h"
 
 /* NOMINMAX */ // windows.h conflicts
 #ifndef NOMINMAX   #ifndef max
@@ -59,6 +60,9 @@ private:
 	std::vector<Vehicle*> vehiclesOut; // for vehicles already out of screen
 	std::vector<box> lastBoxes; // objects in the last frame, used to calculate IoU
 	int frameCounter;
+	std::vector<std::pair<int, int>> ROI; // four points from left top clockwise
+	cv::Mat emptyImg;
+	cv::Mat ROIMask;
 
 	// methods
     void draw_boxes(cv::Mat mat_img, std::vector<bbox_t> result_vec, std::vector<std::string> obj_names,
@@ -75,6 +79,7 @@ signals:
 
 private slots:
 	void on_actionOpen_triggered();
+	void selectROI(QMouseEvent* event);
 	// void updateFrame(cv::Mat mat_img);
 };
 

@@ -14,11 +14,32 @@ MainWindow::MainWindow(QWidget *parent) :
 	viewerWidth = ui->videoViewer->width();
 	viewerHeight = ui->videoViewer->height();
 	frameCounter = 0;
+
+	emptyImg = Mat(viewerHeight, viewerWidth, CV_8UC3, Scalar(100, 100, 100)); // empty screen
+	/*ROI.push_back(make_pair(0, 0));
+	ROI.push_back(make_pair(viewerWidth, 0));
+	ROI.push_back(make_pair(viewerWidth, viewerHeight));
+	ROI.push_back(make_pair(0, viewerHeight));
+	for (auto vertex : ROI) {
+		circle(emptyImg, Point(vertex.first, vertex.second), 20, Scalar(0, 0, 255));
+	}*/
+	
+	updateFrame(emptyImg);
+
+	bool result = connect(ui->videoViewer, SIGNAL(clicked(QMouseEvent*)),
+		this, SLOT(selectROI(QMouseEvent*)));
 }
 
 MainWindow::~MainWindow()
 {
     delete ui;
+}
+
+void MainWindow::selectROI(QMouseEvent* event) {
+	int xPos = event->pos().x(), yPos = event->pos().y();
+	if (ROI.size() < 4) {
+		ROI.push_back(make_pair(xPos, yPos));
+	}
 }
 
 void MainWindow::draw_boxes(cv::Mat mat_img, std::vector<bbox_t> result_vec, std::vector<std::string> obj_names,
@@ -83,9 +104,6 @@ std::vector<std::string> MainWindow::objects_names_from_file(std::string const f
 void MainWindow::on_actionOpen_triggered() {
 	auto filePath = QFileDialog::getOpenFileName(this, tr("Open video file"), "", tr("All Files (*)")).toUtf8().constData();
 	QFuture<void> future = QtConcurrent::run(this, &MainWindow::trackVideo, filePath);
-	// bool connectSuccess = connect(this, SIGNAL(frameChanged(cv::Mat)), this, SLOT(updateFrame(cv::Mat)));
-	// bool connectSuccess = connect(this, &MainWindow::frameChanged, this, &MainWindow::updateFrame);
-	// bool connectSuccess = connect(this, &MainWindow::frameChanged, this, &MainWindow::updateFrame);
 }
 
 void MainWindow::trackVideo(string filePath) {
@@ -146,36 +164,15 @@ void MainWindow::trackVideo(string filePath) {
 					}
 					t_cap = std::thread([&]() { cap >> cap_frame; });
 
+					while (ROI.size() < 4) {
+						updateFrame(cur_frame); // pause until ROI is selected
+					}
 					std::vector<bbox_t> result_vec = detector.detect(cur_frame);
-					//// swap result and input-frame
-					//if (consumed)
-					//{
-					//	std::unique_lock<std::mutex> lock(mtx);
-					//	det_image = detector.mat_to_image_resize(cur_frame);
-					//	result_vec = thread_result_vec;
-					//	result_vec = detector.tracking(result_vec);	// comment it - if track_id is not required
-					//	//---
-					//	// draw_boxes(cur_frame, result_vec, obj_names, 3, current_det_fps, current_cap_fps);
-					//	//---
-					//	consumed = false;
-					//}
-					//// launch thread once
-					//if (!t_detect.joinable()) {
-					//	t_detect = std::thread([&]() {
-					//		auto current_image = det_image;
-					//		consumed = true;
-					//		while (current_image.use_count() > 0) {
-					//			auto count = current_image.use_count();
-					//			auto result = detector.detect_resized(*current_image, frame_size, 0.24, true);
-					//			++fps_det_counter;
-					//			std::unique_lock<std::mutex> lock(mtx);
-					//			thread_result_vec = result;
-					//			current_image = det_image;
-					//			consumed = true;
-					//			cv.notify_all();
-					//		}
-					//	});
-					//}
+					std::vector<bbox_t> filtered_vec;
+					// filter based on selected ROI
+					for (auto vec : result_vec) {
+						Mat vecMat;
+					}
 
 					if (!cur_frame.empty()) {
 						steady_end = std::chrono::steady_clock::now();
@@ -189,43 +186,6 @@ void MainWindow::trackVideo(string filePath) {
 
 						// --- tracking part below
 						diffVehicles(cur_frame, result_vec);
-						//std::vector<box> currentBoxes;
-						//for (int i = 0; result_vec.size() > 0 && i < result_vec.size(); i++) {
-						//	box currentVehicle;
-						//	currentVehicle.x = result_vec[i].x,
-						//		currentVehicle.y = result_vec[i].y,
-						//		currentVehicle.w = result_vec[i].w,
-						//		currentVehicle.h = result_vec[i].h;
-						//	float iouMax = 0;
-						//	int maxIdx = -1;
-						//	for (int j = 0; j < lastBoxes.size(); j++) {
-						//		float iou = box_iou(currentVehicle, lastBoxes[j]);
-						//		if (iou > iouMax) {
-						//			iouMax = iou;
-						//			maxIdx = j;
-						//		}
-						//	}
-						//	if (iouMax == 0) { // no previous found, new vehicle entered
-						//		vehicles.push_back(new Vehicle(currentVehicle));
-						//	}
-						//	else {
-						//		for (int j = 0; j < vehicles.size(); j++) {
-						//			float fuck = box_iou(currentVehicle, vehicles[j]->boxes[vehicles[j]->boxes.size() - 1]);
-						//			if (fuck > 0) {
-						//				vehicles[j]->boxes.push_back(currentVehicle);
-						//				string oImgPath = "D:\\Data\\output\\" + std::to_string(j) + "\\" + std::to_string(frameCounter) + ".jpg";
-						//				Rect boxRect = cv::Rect(currentVehicle.x, currentVehicle.y, 
-						//					min(currentVehicle.w, cur_frame.cols - currentVehicle.x), 
-						//					min(currentVehicle.h, cur_frame.rows - currentVehicle.y)); // avoid out of boundary
-						//				Mat oImg = cv::Mat(cur_frame, boxRect);
-						//				cv::imwrite(oImgPath, oImg);
-						//			}
-						//		}
-						//	}
-						//	currentBoxes.push_back(currentVehicle);
-						//}
-						//lastBoxes = currentBoxes;
-						//frameCounter++;
 						// --- tracking part above
 
 						// imwrite("D:\\Data\\test\\3.jpg", cur_frame);
@@ -346,6 +306,20 @@ void MainWindow::updateFrame(Mat mat_img) {
 	int imgWidth = mat_img.cols, imgHeight = mat_img.rows;
 	cv::resize(mat_img, mat_img, Size(viewerWidth, viewerHeight), 1.0, 1.0, INTER_LANCZOS4);
 	cvtColor(mat_img, mat_img, CV_BGR2RGB);
+	auto ROIdraw = ROI;
+	if (ROI.size() == 4) {
+		ROIdraw.push_back(ROIdraw[0]); // draw rectangle when 4 points selected
+		vector<Point> ROIPoints = { Point(ROI[0].first, ROI[0].second),
+			Point(ROI[1].first, ROI[1].second),
+			Point(ROI[2].first, ROI[2].second),
+			Point(ROI[3].first, ROI[3].second)
+		};
+		
+		imshow("fuck", ROIMask); waitKey();
+	}
+	for (int i = 0; i < (int)ROIdraw.size() - 1; i++) {
+		line(mat_img, Point(ROIdraw[i].first, ROIdraw[i].second), Point(ROIdraw[i + 1].first, ROIdraw[i + 1].second), Scalar(255, 0, 0), 3);
+	}
 	ui->videoViewer->setPixmap(QPixmap::fromImage(QImage(mat_img.data, mat_img.cols, mat_img.rows, mat_img.step, QImage::Format_RGB888)));
 }
 
