@@ -40,6 +40,21 @@ void MainWindow::selectROI(QMouseEvent* event) {
 	if (ROI.size() < 4) {
 		ROI.push_back(make_pair(xPos, yPos));
 	}
+	if (ROI.size() == 4 && ROIMask.empty()) {
+		vector<Point> ROIPoints = { {
+				Point(ROI[0].first, ROI[0].second),
+				Point(ROI[1].first, ROI[1].second),
+				Point(ROI[2].first, ROI[2].second),
+				Point(ROI[3].first, ROI[3].second)
+			} };
+		const Point* ppt[1] = { &ROIPoints[0] };
+		int npt[] = { 4 };
+		ROIMask.create(viewerHeight, viewerWidth, CV_8UC1);
+		ROIMask = Scalar(0);
+		fillPoly(ROIMask, ppt, npt, 1, Scalar(255), 8);
+		cv::resize(ROIMask, ROIMask, Size(videoWidth, videoHeight), 1.0, 1.0, INTER_LANCZOS4);
+		/*imshow("fuck", ROIMask); waitKey();*/
+	}
 }
 
 void MainWindow::draw_boxes(cv::Mat mat_img, std::vector<bbox_t> result_vec, std::vector<std::string> obj_names,
@@ -102,7 +117,7 @@ std::vector<std::string> MainWindow::objects_names_from_file(std::string const f
 }
 
 void MainWindow::on_actionOpen_triggered() {
-	auto filePath = QFileDialog::getOpenFileName(this, tr("Open video file"), "", tr("All Files (*)")).toUtf8().constData();
+	string filePath = QFileDialog::getOpenFileName(this, tr("Open video file"), "", tr("All Files (*)")).toUtf8().constData();
 	QFuture<void> future = QtConcurrent::run(this, &MainWindow::trackVideo, filePath);
 }
 
@@ -110,10 +125,18 @@ void MainWindow::trackVideo(string filePath) {
 	//std::string filename = "D:\\Data\\session1_center.avi";
 	string filename = filePath;
 
-	Detector detector("D:\\Data\\yolo-all.cfg",
-		"D:\\Data\\yolo-all_45000.weights");
+	Detector detector("D:\\Data\\training_models\\size\\yolo-all.cfg",
+		"D:\\Data\\training_models\\size\\yolo-all_45000.weights");
+	auto obj_names = objects_names_from_file("D:\\Data\\training_models\\size\\all_obj.names");
 
-	auto obj_names = objects_names_from_file("D:\\Data\\all_obj.names");
+	/*Detector detectorLogo("D:\\Data\\training_models\\logo\\yolo-logo.cfg",
+		"D:\\Data\\training_models\\logo\\yolo-logo_25000.weights");
+	auto logo_names = objects_names_from_file("D:\\Data\\training_models\\logo\\logo_obj.names");
+
+	Detector detectorColor("D:\\Data\\training_models\\color\\yolo-color.cfg",
+		"D:\\Data\\training_models\\color\\yolo-color_7000.weights");
+	auto color_names = objects_names_from_file("D:\\Data\\training_models\\color\\color_obj.names");*/
+
 	std::string out_videofile = "result.avi";
 	bool const save_output_videofile = false;
 
@@ -157,6 +180,10 @@ void MainWindow::trackVideo(string filePath) {
 
 				int frameCounter = 0;
 				while (!cur_frame.empty()) {
+					if (!videoHeight) {
+						videoWidth = cur_frame.cols;
+						videoHeight = cur_frame.rows;
+					}
 					if (t_cap.joinable()) {
 						t_cap.join();
 						++fps_cap_counter;
@@ -171,8 +198,17 @@ void MainWindow::trackVideo(string filePath) {
 					std::vector<bbox_t> filtered_vec;
 					// filter based on selected ROI
 					for (auto vec : result_vec) {
-						Mat vecMat;
+						Mat box(videoHeight, videoWidth, CV_8UC1, Scalar(0));
+						rectangle(box, Point(vec.x, vec.y), Point(vec.x + vec.w, vec.y + vec.h), Scalar(255), CV_FILLED);
+						int numBox = countNonZero(box),
+							numROI = countNonZero(ROIMask),
+							numAll = countNonZero(box + ROIMask);
+						if (numAll < numBox + numROI) {
+							filtered_vec.push_back(vec);
+						}
+						/*imshow("DAFD", vecMat + ROIMask); waitKey();*/
 					}
+					result_vec = filtered_vec;
 
 					if (!cur_frame.empty()) {
 						steady_end = std::chrono::steady_clock::now();
@@ -309,13 +345,6 @@ void MainWindow::updateFrame(Mat mat_img) {
 	auto ROIdraw = ROI;
 	if (ROI.size() == 4) {
 		ROIdraw.push_back(ROIdraw[0]); // draw rectangle when 4 points selected
-		vector<Point> ROIPoints = { Point(ROI[0].first, ROI[0].second),
-			Point(ROI[1].first, ROI[1].second),
-			Point(ROI[2].first, ROI[2].second),
-			Point(ROI[3].first, ROI[3].second)
-		};
-		
-		imshow("fuck", ROIMask); waitKey();
 	}
 	for (int i = 0; i < (int)ROIdraw.size() - 1; i++) {
 		line(mat_img, Point(ROIdraw[i].first, ROIdraw[i].second), Point(ROIdraw[i + 1].first, ROIdraw[i + 1].second), Scalar(255, 0, 0), 3);

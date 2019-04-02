@@ -56,6 +56,8 @@ private:
     Ui::MainWindow *ui;
 	int viewerWidth;
 	int viewerHeight;
+	int videoWidth;
+	int videoHeight;
 	std::vector<Vehicle*> vehicles; // for vehicles inside screen
 	std::vector<Vehicle*> vehiclesOut; // for vehicles already out of screen
 	std::vector<box> lastBoxes; // objects in the last frame, used to calculate IoU
